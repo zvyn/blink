@@ -1,0 +1,9 @@
+[project]
+name = "blink"
+version = "0.1.0"
+description = "Let the LEDs blink!"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "rpi-ws281x>=5.0.0",
+]
