@@ -7,3 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "rpi-ws281x>=5.0.0",
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "PIE", "UP", "B", "SIM", "I"]
