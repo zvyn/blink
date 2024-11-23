@@ -30,9 +30,12 @@ class TerminalStrip(list[int]):
     def __init__(self, num: int, *_args, **_kwargs):
         super().__init__([0] * num)
 
-    def show(self) -> None:
+    def __str__(self) -> str:
         pixels = (f"{RGB.from_int(value).ansi}▪" for value in self)
-        print(f"\x1b[48;2;0;0;0m{''.join(pixels)}\x1b[0m", flush=True)
+        return f"\x1b[48;2;0;0;0m{''.join(pixels)}\x1b[0m"
+
+    def show(self) -> None:
+        print(self)
 
 
 @cache
@@ -80,7 +83,7 @@ class RGB(NamedTuple):
         return f"\x1b[38;2;{self.r};{self.g};{self.b}m"
 
     @property
-    def to_hsi(self) -> HSI:
+    def hsi(self) -> HSI:
         # see https://en.wikipedia.org/wiki/HSL_and_HSV
         max_ = max(self.r, self.g, self.b)
         min_ = min(self.r, self.g, self.b)
@@ -165,7 +168,7 @@ def slow_transition(
 
 def quicksort(
     strip: Strip,
-    lt_func: Callable[[RGB, RGB], bool] = lambda a, b: a.to_hsi < b.to_hsi,
+    lt_func: Callable[[RGB, RGB], bool] = lambda a, b: a.hsi < b.hsi,
     sleep: float = 0.01,
     from_index: int = 0,
     to_index: int | None = None,

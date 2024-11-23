@@ -2,7 +2,7 @@ version = 1
 requires-python = ">=3.12"
 
 [[package]]
-name = "blink"
+name = "zvyn-rpi-ws281x-demo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
