@@ -1,11 +1,33 @@
+"""
+Let the LEDs blink!
+
+Or the terminal, see `--term` and `--history` options.
+"""
+
 import random
+import signal
+import sys
 import time
+from argparse import ArgumentParser, Namespace, RawDescriptionHelpFormatter
 from collections.abc import Callable, Iterable
-from functools import cache
 from shutil import get_terminal_size
-from typing import NamedTuple, Protocol, Self, SupportsIndex, cast, overload
+from typing import NamedTuple, NoReturn, Protocol, Self, SupportsIndex, cast, overload
 
 from rpi_ws281x import Color, PixelStrip
+
+FLAG_COLORS = (
+    0xFFFFFF,
+    0xF6AAB8,
+    0x60CDF6,
+    0x674018,
+    0x050708,
+    0xE51E25,
+    0xF68D1F,
+    0xF9EE14,
+    0x0D8040,
+    0x3D5FAC,
+    0x742A85,
+)
 
 
 class Strip(Protocol):
@@ -27,7 +49,8 @@ class Strip(Protocol):
 class TerminalStrip(list[int]):
     """Drop-in replacement for PixelStrip printing pixels to the terminal"""
 
-    def __init__(self, num: int, *_args, **_kwargs):
+    def __init__(self, num: int, print_end="\r"):
+        self.print_end = print_end
         super().__init__([0] * num)
 
     def __str__(self) -> str:
@@ -35,24 +58,7 @@ class TerminalStrip(list[int]):
         return f"\x1b[48;2;0;0;0m{''.join(pixels)}\x1b[0m"
 
     def show(self) -> None:
-        print(self)
-
-
-@cache
-def get_strip(num: int | None = None, pin: int = 18) -> Strip:
-    """Try to initialize real PixelStrip, fall back to terminal output"""
-    try:
-        strip = PixelStrip(
-            num=num or 300,
-            pin=pin,
-        )
-        strip.begin()
-        # the cast is half a lie: PixelStrip _technically_ allows using kwargs
-        # for `__getitem__` etc. and has no static annotations guaranteeing the
-        # the relationship between pos and return type (int->int, slice->list:
-        return cast(Strip, strip)
-    except RuntimeError:
-        return TerminalStrip(num=num or get_terminal_size().columns)
+        print(self, end=self.print_end, flush=True)
 
 
 class HSI(NamedTuple):
@@ -196,24 +202,12 @@ def quicksort(
     quicksort(strip, lt_func=lt_func, sleep=sleep, from_index=i, to_index=to_index)
 
 
+def _get_flag_pixels(num: int) -> list[int]:
+    return [FLAG_COLORS[int(len(FLAG_COLORS) * (i / num))] for i in range(num)]
+
+
 def pride(strip: Strip) -> None:
-    new_pride_colors = [
-        0xFFFFFF,
-        0xF6AAB8,
-        0x60CDF6,
-        0x674018,
-        0x050708,
-        0xE51E25,
-        0xF68D1F,
-        0xF9EE14,
-        0x0D8040,
-        0x3D5FAC,
-        0x742A85,
-    ]
-    pixels = [
-        new_pride_colors[int(len(new_pride_colors) * (i / len(strip)))]
-        for i in range(len(strip))
-    ]
+    pixels = _get_flag_pixels(len(strip))
     random_rain(strip, pixels)
     quicksort(strip)
     quicksort(strip, lambda x, y: int(x) > int(y))
@@ -222,21 +216,21 @@ def pride(strip: Strip) -> None:
     random_rain(strip, pixels)
     quicksort(
         strip,
-        lambda x, y: new_pride_colors.index(int(x)) < new_pride_colors.index(int(y)),
+        lambda x, y: FLAG_COLORS.index(int(x)) < FLAG_COLORS.index(int(y)),
         sleep=0.1,
     )
     time.sleep(1)
-    for c in new_pride_colors:
+    for c in FLAG_COLORS:
         random_wipe(strip, c)
-    c = RGB.from_int(new_pride_colors[-1])
-    for c_next in map(RGB.from_int, new_pride_colors):
+    c = RGB.from_int(FLAG_COLORS[-1])
+    for c_next in map(RGB.from_int, FLAG_COLORS):
         slow_transition(strip, c, c_next)
         c = c_next
     random.shuffle(pixels)
     random_rain(strip, pixels)
     quicksort(
         strip,
-        lambda x, y: new_pride_colors.index(int(x)) < new_pride_colors.index(int(y)),
+        lambda x, y: FLAG_COLORS.index(int(x)) < FLAG_COLORS.index(int(y)),
     )
 
 
@@ -251,10 +245,57 @@ def all_the_colors(strip: Strip) -> None:
     quicksort(strip, lambda x, y: x > y)
 
 
-if __name__ == "__main__":
-    strip = get_strip()
+def _get_real_strip(num: int, pin: int) -> Strip:
+    strip = PixelStrip(
+        num=num or 300,
+        pin=pin,
+    )
+    strip.begin()
+
+    # the cast is half a lie: PixelStrip _technically_ allows using kwargs
+    # for `__getitem__` etc. and has no static annotations guaranteeing the
+    # the relationship between pos and return type (int->int, slice->list).
+    return cast(Strip, strip)
+
+
+def _parse_args() -> Namespace:
+    parser = ArgumentParser(
+        description=__doc__,
+        epilog=(
+            f"\x1b[0m\x1b[5m"
+            f"{''.join(f'{RGB.from_int(i).ansi}❤︎' for i in FLAG_COLORS)}"
+            "\x1b[0m"
+        ),
+        formatter_class=RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--num", type=int, help="Number of pixels on the strip")
+    parser.add_argument(
+        "--pin", type=int, help="GPIO pin to use (default: 18)", default=18
+    )
+    parser.add_argument(
+        "--term", action="store_true", help="Print to terminal instead of LEDs"
+    )
+    parser.add_argument(
+        "--history", action="store_true", help="Do not update terminal inline"
+    )
+    return parser.parse_args(sys.argv[1:])
+
+
+def main() -> NoReturn:
+    args = _parse_args()
+    strip = (
+        TerminalStrip(
+            num=args.num or get_terminal_size().columns,
+            print_end="\n" if args.history else "\r",
+        )
+        if args.term
+        else _get_real_strip(args.num, args.pin)
+    )
     while True:
         all_the_colors(strip)
-        time.sleep(1)
         pride(strip)
-        time.sleep(1)
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGINT, lambda signal, frame: exit(0))
+    main()
