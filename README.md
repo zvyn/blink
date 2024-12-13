@@ -10,4 +10,4 @@ or
 pip install rpi_ws281x
 python -m blink
 ```
-[![asciicast](https://asciinema.org/a/GNQ7z9pQ00zmNT4hH6pXudlZV.svg)](https://asciinema.org/a/GNQ7z9pQ00zmNT4hH6pXudlZV)
+[![asciicast](https://asciinema.org/a/694699.svg)](https://asciinema.org/a/694699)
