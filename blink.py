@@ -1,71 +1,63 @@
 import time
 import random
 from functools import cache
+from typing import NoReturn, Self
+from dataclasses import dataclass
 
-from rpi_ws281x import Color, PixelStrip, ws
-
-# LED strip configuration:
-LED_COUNT = 300         # Number of LED pixels.
-LED_PIN = 18           # GPIO pin connected to the pixels (must support PWM!).
-LED_FREQ_HZ = 800_000   # LED signal frequency in hertz (usually 800khz)
-LED_DMA = 10           # DMA channel to use for generating signal (try 10)
-LED_BRIGHTNESS = 20  # 255   # Set to 0 for darkest and 255 for brightest
-LED_INVERT = False     # True to invert the signal (when using NPN transistor level shift)
-LED_CHANNEL = 0
-LED_STRIP = ws.WS2811_STRIP_GRB
+from rpi_ws281x import Color, PixelStrip as Strip, ws
 
 
 @cache
 def get_strip():
-    # Create NeoPixel object with appropriate configuration.
-    strip = PixelStrip(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL, LED_STRIP)
-    # Intialize the library (must be called once before other functions).
+    strip = Strip(
+        num=300,
+        pin=18,
+        freq_hz=800_000,
+        dma=10,
+        brightness=20,
+        invert=False,
+        channel=0,
+        strip_type=ws.WS2811_STRIP_GRB,
+    )
     strip.begin()
     return strip
 
 
+@dataclass(slots=True, eq=True, order=True)
 class RGB:
-    __slots__ = ["r", "g", "b"]
-
     r: int
     g: int
     b: int
 
-    def __init__(self, r: int | None = None, g: int | None = None, b: int | None = None):
-        if r is None:
-            assert g is None
-            assert b is None
-            r = random.randint(0, 0xffffff)
-        if g is None:
-            assert b is None
-            self.r = (r >> 16) & 0xff
-            self.g = (r >> 8) & 0xff
-            self.b = r & 0xff
-        else:
-            self.r = r
-            self.g = g
-            self.b = b
+    @classmethod
+    def from_int(cls, r: int) -> Self:
+        return cls(
+            r=(r >> 16) & 0xff,
+            g=(r >> 8) & 0xff,
+            b=r & 0xff,
+        )
 
-    def __str__(self):
+    @classmethod
+    def random(cls) -> Self:
+        return cls.from_int(random.randint(0, 0xffffff))
+
+    def __str__(self) -> str:
         return f"#{int(self):06x}"
 
-    def __eq__(self, other):
-        return int(self) == int(other)
+    def __invert__(self) -> Self:
+        return self.from_int(0xffffff - int(self))
 
-    def __invert__(self):
-        return type(self)(0xffffff - int(self))
-
-    def __int__(self):
+    def __int__(self) -> int:
         return (self.r << 16) | (self.g << 8) | self.b
 
 
-def wipe(strip, color: int = Color(0, 0, 0)):
+def wipe(strip: Strip, color: int = Color(0, 0, 0)) -> None:
     for i in range(strip.numPixels()):
         strip.setPixelColor(i, color)
     strip.show()
 
 
-def random_rain(strip):
+def random_rain(strip: Strip) -> None:
     pixels = [x for x in range(0, strip.numPixels())]
     random.shuffle(pixels)
     for i in pixels:
@@ -75,7 +67,7 @@ def random_rain(strip):
         time.sleep(0.001)
 
 
-def random_wipe(strip, c: int = 0):
+def random_wipe(strip: Strip, c: int = 0) -> None:
     pixels = [x for x in range(0, strip.numPixels())]
     random.shuffle(pixels)
     for i in pixels:
@@ -84,7 +76,7 @@ def random_wipe(strip, c: int = 0):
         time.sleep(0.001)
 
 
-def shuffle(strip):
+def shuffle(strip: Strip) -> None:
     for i in range(0, strip.numPixels()):
         c = random.randint(0, 0xffffff)
         strip.setPixelColor(i, int(c))
@@ -97,8 +89,8 @@ def next_val(from_, to):
     return from_ + (1 if from_ < to else -1)
 
 
-def slow_transition(strip, c: RGB = None, c_next: RGB = None):
-    c = c or RGB(random.randint(1, 0xffffff))
+def slow_transition(strip: Strip, c: RGB | None = None, c_next: RGB  | None = None) -> None:
+    c = c or RGB.random()
     c_next = c_next or ~c
     wipe(strip, int(c))
     print(c, "->", c_next)
@@ -110,15 +102,15 @@ def slow_transition(strip, c: RGB = None, c_next: RGB = None):
         time.sleep(0.001)
 
 
-def to_complex(strip):
-    c = RGB(0xff0000)
+def to_complex(strip: Strip) -> NoReturn:
+    c = RGB.random()
     while True:
         invert = random.randint(0, 1)
         if invert:
             c_next = ~c
             invert = False
         else:
-            c_next = RGB(random.randint(1, 0xffffff))
+            c_next = RGB.random()
             invert = True
         print(c, "->", c_next)
         step = random.choice((2, 3, 5))
@@ -141,11 +133,11 @@ def to_complex(strip):
 
 
 
-def demo(strip = None):
+def demo(strip: Strip | None = None) -> NoReturn:
     strip = strip or get_strip()
 
     while True:
-        c = RGB()
+        c = RGB.random()
         random_wipe(strip, 0)
         time.sleep(0.1)
         random_rain(strip)
@@ -160,7 +152,7 @@ def demo(strip = None):
             time.sleep(i / 1000)
         random_wipe(strip, int(c))
         slow_transition(strip, c)
-        slow_transition(strip, c, RGB())
+        slow_transition(strip, c, RGB.random())
         slow_transition(strip, c)
 
 
