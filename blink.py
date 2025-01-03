@@ -58,6 +58,7 @@ class TerminalStrip(list[int]):
         return f"\x1b[48;2;0;0;0m{''.join(pixels)}\x1b[0m"
 
     def show(self) -> None:
+        time.sleep(0.005)
         print(self, end=self.print_end, flush=True)
 
 
@@ -82,7 +83,10 @@ class RGB(NamedTuple):
 
     @classmethod
     def random(cls) -> Self:
-        return cls.from_int(random.randint(0, 0xFFFFFF))
+        value = cls.from_int(0)
+        while all(x < 20 for x in (value.r, value.g, value.b)):
+            value = cls.from_int(random.randint(0, 0xFFFFFF))
+        return value
 
     @property
     def ansi(self) -> str:
@@ -142,7 +146,6 @@ def random_wipe(strip: Strip, c: int = 0) -> None:
     for i in pixels:
         strip[i] = c
         strip.show()
-        time.sleep(0.001)
 
 
 def shuffle(strip: Strip) -> None:
@@ -169,13 +172,13 @@ def slow_transition(
             _close_in(c.b, c_next.b),
         )
         wipe(strip, int(c))
-        time.sleep(0.01)
+        time.sleep(0.001)
 
 
 def quicksort(
     strip: Strip,
     lt_func: Callable[[RGB, RGB], bool] = lambda a, b: a.hsi < b.hsi,
-    sleep: float = 0.01,
+    sleep: float = 0.001,
     from_index: int = 0,
     to_index: int | None = None,
 ) -> None:
@@ -202,6 +205,18 @@ def quicksort(
     quicksort(strip, lt_func=lt_func, sleep=sleep, from_index=i, to_index=to_index)
 
 
+def one_by_one(strip: Strip) -> None:
+    for i in range(len(strip)):
+        strip[i] = int(RGB.random())
+        if i > 0:
+            strip[i - 1] = Color(0, 0, 0)
+        strip.show()
+    for i in range(len(strip) - 1, 0, -1):
+        strip[i] = int(RGB.random())
+        strip[i - 1] = Color(0, 0, 0)
+        strip.show()
+
+
 def _get_flag_pixels(num: int) -> list[int]:
     return [FLAG_COLORS[int(len(FLAG_COLORS) * (i / num))] for i in range(num)]
 
@@ -217,7 +232,7 @@ def pride(strip: Strip) -> None:
     quicksort(
         strip,
         lambda x, y: FLAG_COLORS.index(int(x)) < FLAG_COLORS.index(int(y)),
-        sleep=0.1,
+        sleep=0.01,
     )
     time.sleep(1)
     for c in FLAG_COLORS:
@@ -292,7 +307,9 @@ def main() -> NoReturn:
         else _get_real_strip(args.num, args.pin)
     )
     while True:
+        one_by_one(strip)
         all_the_colors(strip)
+        one_by_one(strip)
         pride(strip)
 
 
